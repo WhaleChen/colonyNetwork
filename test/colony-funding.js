@@ -4,7 +4,13 @@ import { toBN, sha3 } from "web3-utils";
 
 import { MANAGER, EVALUATOR, WORKER, MANAGER_ROLE, EVALUATOR_ROLE, WORKER_ROLE, WORKER_PAYOUT, INITIAL_FUNDING } from "../helpers/constants";
 import { getTokenArgs, checkErrorRevert, web3GetBalance, forwardTime, currentBlockTime, bnSqrt } from "../helpers/test-helper";
-import { fundColonyWithTokens, setupRatedTask, executeSignedTaskChange, executeSignedRoleAssignment, makeTask } from "../helpers/test-data-generator";
+import {
+  fundColonyWithInitialTokens,
+  setupRatedTask,
+  executeSignedTaskChange,
+  executeSignedRoleAssignment,
+  makeTask
+} from "../helpers/test-data-generator";
 
 const EtherRouter = artifacts.require("EtherRouter");
 const IColony = artifacts.require("IColony");
@@ -35,6 +41,12 @@ contract("Colony Funding", addresses => {
     const { colonyAddress } = logs[0].args;
     await token.setOwner(colonyAddress);
     colony = await IColony.at(colonyAddress);
+    await colony.setTokenSupplyCeiling(
+      toBN(2)
+        .pow(toBN(256))
+        .subn(1)
+        .toString()
+    );
     const otherTokenArgs = getTokenArgs();
     otherToken = await Token.new(...otherTokenArgs);
   });
@@ -59,7 +71,7 @@ contract("Colony Funding", addresses => {
     });
 
     it("should not put its own tokens in to the reward pot", async () => {
-      await fundColonyWithTokens(colony, token, 100);
+      await fundColonyWithInitialTokens(colony, token, 100);
       const colonyRewardPotBalance = await colony.getPotBalance.call(0, token.address);
       const colonyPotBalance = await colony.getPotBalance.call(1, token.address);
       const colonyTokenBalance = await token.balanceOf.call(colony.address);
@@ -69,7 +81,7 @@ contract("Colony Funding", addresses => {
     });
 
     it("should let tokens be moved between pots", async () => {
-      await fundColonyWithTokens(colony, otherToken, 100);
+      await fundColonyWithInitialTokens(colony, otherToken, 100);
       await makeTask({ colony });
       await colony.moveFundsBetweenPots(1, 2, 51, otherToken.address);
       const colonyPotBalance = await colony.getPotBalance.call(1, otherToken.address);
@@ -81,7 +93,7 @@ contract("Colony Funding", addresses => {
     });
 
     it("should not let tokens be moved from the pot for payouts to token holders", async () => {
-      await fundColonyWithTokens(colony, otherToken, 100);
+      await fundColonyWithInitialTokens(colony, otherToken, 100);
       await makeTask({ colony });
 
       await checkErrorRevert(colony.moveFundsBetweenPots(0, 2, 1, otherToken.address), "colonyFunding-cannot-move-funds-from-pot-0");
@@ -96,7 +108,7 @@ contract("Colony Funding", addresses => {
     });
 
     it("should not let tokens be moved by non-admins", async () => {
-      await fundColonyWithTokens(colony, otherToken, 100);
+      await fundColonyWithInitialTokens(colony, otherToken, 100);
       await makeTask({ colony });
 
       await checkErrorRevert(colony.moveFundsBetweenPots(1, 2, 51, otherToken.address, { from: EVALUATOR }));
@@ -109,7 +121,7 @@ contract("Colony Funding", addresses => {
     });
 
     it("should not allow more tokens to leave a pot than the pot has (even if the colony has that many)", async () => {
-      await fundColonyWithTokens(colony, otherToken, 100);
+      await fundColonyWithInitialTokens(colony, otherToken, 100);
       await makeTask({ colony });
       await makeTask({ colony });
       await colony.moveFundsBetweenPots(1, 2, 40, otherToken.address);
@@ -146,7 +158,7 @@ contract("Colony Funding", addresses => {
       //
       // NB Also that since we can no longer reduce the pot to below the budget,
       // scenarios 7, 9, 13 should revert.
-      await fundColonyWithTokens(colony, otherToken, 100);
+      await fundColonyWithInitialTokens(colony, otherToken, 100);
       const taskId = await makeTask({ colony });
       await executeSignedRoleAssignment({
         colony,
@@ -382,8 +394,8 @@ contract("Colony Funding", addresses => {
     });
 
     it("should pay fees on revenue correctly", async () => {
-      await fundColonyWithTokens(colony, otherToken, 100);
-      await fundColonyWithTokens(colony, otherToken, 200);
+      await fundColonyWithInitialTokens(colony, otherToken, 100);
+      await fundColonyWithInitialTokens(colony, otherToken, 200);
       const colonyPotBalance = await colony.getPotBalance.call(1, otherToken.address);
       const colonyRewardPotBalance = await colony.getPotBalance.call(0, otherToken.address);
       const colonyTokenBalance = await otherToken.balanceOf.call(colony.address);
@@ -393,14 +405,14 @@ contract("Colony Funding", addresses => {
     });
 
     it("should not allow contributions to nonexistent pots", async () => {
-      await fundColonyWithTokens(colony, otherToken, 100);
+      await fundColonyWithInitialTokens(colony, otherToken, 100);
       await checkErrorRevert(colony.moveFundsBetweenPots(1, 5, 40, otherToken.address));
       const colonyPotBalance = await colony.getPotBalance.call(1, otherToken.address);
       assert.equal(colonyPotBalance.toNumber(), 99);
     });
 
     it("should not allow funds to be removed from a task with payouts to go", async () => {
-      await fundColonyWithTokens(colony, otherToken, INITIAL_FUNDING);
+      await fundColonyWithInitialTokens(colony, otherToken, INITIAL_FUNDING);
       const taskId = await setupRatedTask({ colonyNetwork, colony, token: otherToken });
       await colony.finalizeTask(taskId);
       await checkErrorRevert(colony.moveFundsBetweenPots(2, 1, 40, otherToken.address), "colony-funding-task-bad-state");
@@ -409,7 +421,7 @@ contract("Colony Funding", addresses => {
     });
 
     it("should allow funds to be removed from a task if there are no more payouts of that token to be claimed", async () => {
-      await fundColonyWithTokens(colony, otherToken, 363 * 1e18);
+      await fundColonyWithInitialTokens(colony, otherToken, 363 * 1e18);
       const taskId = await setupRatedTask({ colonyNetwork, colony, token: otherToken });
       await colony.moveFundsBetweenPots(1, 2, 10, otherToken.address);
       await colony.finalizeTask(taskId);
@@ -423,7 +435,7 @@ contract("Colony Funding", addresses => {
     });
 
     it("should not allow user to claim payout if rating is 1", async () => {
-      await fundColonyWithTokens(colony, token, INITIAL_FUNDING);
+      await fundColonyWithInitialTokens(colony, token, INITIAL_FUNDING);
       const taskId = await setupRatedTask({
         colonyNetwork,
         colony,
@@ -584,8 +596,8 @@ contract("Colony Funding", addresses => {
     let initialSquareRoots;
 
     beforeEach(async () => {
-      await fundColonyWithTokens(colony, otherToken, initialFunding.toString());
-      await colony.mintTokens(initialFunding.toString());
+      await fundColonyWithInitialTokens(colony, otherToken, initialFunding.toString());
+      await colony.mintInitialTokens(initialFunding.toString());
       await colony.bootstrapColony([userAddress1], [userReputation.toString()]);
 
       await token.approve(tokenLocking.address, userReputation.toString(), {
@@ -639,7 +651,7 @@ contract("Colony Funding", addresses => {
     it("should be able to collect rewards from multiple payouts of different token", async () => {
       const tokenArgs = getTokenArgs();
       const newToken = await Token.new(...tokenArgs);
-      await fundColonyWithTokens(colony, newToken, initialFunding.toString());
+      await fundColonyWithInitialTokens(colony, newToken, initialFunding.toString());
 
       const tx1 = await colony.startNextRewardPayout(newToken.address);
       const payoutId1 = tx1.logs[0].args.id;
@@ -908,6 +920,13 @@ contract("Colony Funding", addresses => {
       ({ colonyAddress } = logs[0].args);
       const colony2 = IColony.at(colonyAddress);
 
+      const tokenSupplyCeiling = toBN(2)
+        .pow(toBN(256))
+        .subn(1)
+        .toString();
+      await colony1.setTokenSupplyCeiling(tokenSupplyCeiling);
+      await colony2.setTokenSupplyCeiling(tokenSupplyCeiling);
+
       // Giving both colonies the capability to call `mint` function
       const adminRole = 1;
       const newRoles = await DSRoles.new();
@@ -916,12 +935,12 @@ contract("Colony Funding", addresses => {
       await newRoles.setRoleCapability(adminRole, newToken.address, sha3("mint(uint256)").slice(0, 10), true);
       await newToken.setAuthority(newRoles.address);
 
-      await fundColonyWithTokens(colony1, otherToken, initialFunding.toString());
-      await fundColonyWithTokens(colony2, otherToken, initialFunding.toString());
+      await fundColonyWithInitialTokens(colony1, otherToken, initialFunding.toString());
+      await fundColonyWithInitialTokens(colony2, otherToken, initialFunding.toString());
 
       // Minting the tokens so we can give them to users
-      await colony1.mintTokens(userReputation.toString());
-      await colony2.mintTokens(userReputation.toString());
+      await colony1.mintInitialTokens(userReputation.toString());
+      await colony2.mintInitialTokens(userReputation.toString());
 
       // Giving the user colony's native tokens and reputation so they can participate in reward payout
       await colony1.bootstrapColony([userAddress1], [userReputation.toString()]);
@@ -997,6 +1016,13 @@ contract("Colony Funding", addresses => {
       ({ colonyAddress } = logs[0].args);
       const colony2 = IColony.at(colonyAddress);
 
+      const tokenSupplyCeiling = toBN(2)
+        .pow(toBN(256))
+        .subn(1)
+        .toString();
+      await colony1.setTokenSupplyCeiling(tokenSupplyCeiling);
+      await colony2.setTokenSupplyCeiling(tokenSupplyCeiling);
+
       // Giving both colonies the capability to call `mint` function
       const adminRole = 1;
       const newRoles = await DSRoles.new();
@@ -1005,12 +1031,12 @@ contract("Colony Funding", addresses => {
       await newRoles.setRoleCapability(adminRole, newToken.address, sha3("mint(uint256)").slice(0, 10), true);
       await newToken.setAuthority(newRoles.address);
 
-      await fundColonyWithTokens(colony1, otherToken, initialFunding.toString());
-      await fundColonyWithTokens(colony2, otherToken, initialFunding.toString());
+      await fundColonyWithInitialTokens(colony1, otherToken, initialFunding.toString());
+      await fundColonyWithInitialTokens(colony2, otherToken, initialFunding.toString());
 
       // Minting the tokens so we can give them to users
-      await colony1.mintTokens(userReputation.toString());
-      await colony2.mintTokens(userReputation.toString());
+      await colony1.mintInitialTokens(userReputation.toString());
+      await colony2.mintInitialTokens(userReputation.toString());
 
       // Giving the user colony's native tokens and reputation so they can participate in reward payout
       await colony1.bootstrapColony([userAddress1], [userReputation.toString()]);
@@ -1115,11 +1141,17 @@ contract("Colony Funding", addresses => {
         await newToken.setOwner(colonyAddress);
         const newColony = await IColony.at(colonyAddress);
 
+        const tokenSupplyCeiling = toBN(2)
+          .pow(toBN(256))
+          .subn(1)
+          .toString();
+        await newColony.setTokenSupplyCeiling(tokenSupplyCeiling);
+
         const payoutTokenArgs = getTokenArgs();
         const payoutToken = await Token.new(...payoutTokenArgs);
-        await fundColonyWithTokens(newColony, payoutToken, data.totalAmountOfPayoutTokens.toString());
+        await fundColonyWithInitialTokens(newColony, payoutToken, data.totalAmountOfPayoutTokens.toString());
         // Issuing colony's native tokens so they can be given to users in `bootstrapColony`
-        await newColony.mintTokens(data.totalReputation.toString());
+        await newColony.mintInitialTokens(data.totalReputation.toString());
 
         // Every user has equal amount of reputation and tokens (totalReputationAndTokens / 3)
         const reputationPerUser = data.totalReputation.div(toBN(3));

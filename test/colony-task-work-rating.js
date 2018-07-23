@@ -1,5 +1,7 @@
 /* globals artifacts */
 
+import { toBN } from "web3-utils";
+
 import {
   EVALUATOR,
   WORKER,
@@ -18,7 +20,7 @@ import {
   SECONDS_PER_DAY
 } from "../helpers/constants";
 import { getTokenArgs, currentBlockTime, checkErrorRevert, forwardTime, expectEvent } from "../helpers/test-helper";
-import { fundColonyWithTokens, setupAssignedTask, setupRatedTask } from "../helpers/test-data-generator";
+import { fundColonyWithInitialTokens, setupAssignedTask, setupRatedTask } from "../helpers/test-data-generator";
 
 const IColony = artifacts.require("IColony");
 const IColonyNetwork = artifacts.require("IColonyNetwork");
@@ -41,6 +43,12 @@ contract("Colony Task Work Rating", () => {
     const { logs } = await colonyNetwork.createColony(colonyToken.address);
     const { colonyAddress } = logs[0].args;
     colony = await IColony.at(colonyAddress);
+    await colony.setTokenSupplyCeiling(
+      toBN(2)
+        .pow(toBN(256))
+        .subn(1)
+        .toString()
+    );
     const otherTokenArgs = getTokenArgs();
     token = await Token.new(...otherTokenArgs);
   });
@@ -134,7 +142,7 @@ contract("Colony Task Work Rating", () => {
 
   describe("when revealing a task work rating", () => {
     it("should allow revealing a rating by evaluator and worker", async () => {
-      await fundColonyWithTokens(colony, token, INITIAL_FUNDING);
+      await fundColonyWithInitialTokens(colony, token, INITIAL_FUNDING);
       const taskId = await setupRatedTask({ colonyNetwork, colony, token });
 
       const roleManager = await colony.getTaskRole.call(taskId, MANAGER_ROLE);

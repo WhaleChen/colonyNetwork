@@ -26,7 +26,7 @@ import { getTokenArgs, currentBlockTime, forwardTime, bnSqrt } from "../helpers/
 import { setupColonyVersionResolver } from "../helpers/upgradable-contracts";
 import {
   giveUserCLNYTokensAndStake,
-  fundColonyWithTokens,
+  fundColonyWithInitialTokens,
   executeSignedTaskChange,
   executeSignedRoleAssignment,
   makeTask
@@ -88,8 +88,18 @@ contract("All", accounts => {
     tokenAddress = await colony.getToken.call();
     await IColony.defaults({ gasPrice });
 
+    await colony.setTokenSupplyCeiling(200);
+
     const metaColonyAddress = await colonyNetwork.getMetaColony.call();
     metaColony = await IColony.at(metaColonyAddress);
+
+    await metaColony.setTokenSupplyCeiling(
+      toBN(2)
+        .pow(toBN(256))
+        .subn(1)
+        .toString()
+    );
+    await metaColony.setTokenIssuanceRate("1000000000000000000", 1, 0);
 
     const otherTokenArgs = getTokenArgs();
     otherToken = await Token.new(...otherTokenArgs);
@@ -111,7 +121,7 @@ contract("All", accounts => {
     });
 
     it("when working with a Colony", async () => {
-      await colony.mintTokens(200);
+      await colony.mintInitialTokens(200);
       await colony.claimColonyFunds(tokenAddress);
       await colony.setAdminRole(EVALUATOR);
     });
@@ -337,9 +347,15 @@ contract("All", accounts => {
       const { colonyAddress } = logs[0].args;
       const newColony = IColony.at(colonyAddress);
       await newToken.setOwner(colonyAddress);
+      await newColony.setTokenSupplyCeiling(
+        toBN(2)
+          .pow(toBN(256))
+          .subn(1)
+          .toString()
+      );
 
-      await fundColonyWithTokens(newColony, otherToken, initialFunding.toString());
-      await newColony.mintTokens(workerReputation.add(managerReputation).toString());
+      await fundColonyWithInitialTokens(newColony, otherToken, initialFunding.toString());
+      await newColony.mintInitialTokens(workerReputation.add(managerReputation).toString());
 
       await newColony.bootstrapColony([WORKER, MANAGER], [workerReputation.toString(), managerReputation.toString()]);
 
@@ -382,7 +398,7 @@ contract("All", accounts => {
       await forwardTime(5184001);
       await newColony.finalizeRewardPayout(payoutId);
 
-      await fundColonyWithTokens(newColony, otherToken, initialFunding.toString());
+      await fundColonyWithInitialTokens(newColony, otherToken, initialFunding.toString());
 
       const tx2 = await newColony.startNextRewardPayout(otherToken.address);
       const payoutId2 = tx2.logs[0].args.id;
@@ -397,6 +413,34 @@ contract("All", accounts => {
 
       await forwardTime(5184001);
       await newColony.finalizeRewardPayout(payoutId2);
+    });
+
+    it("when issuing tokens", async () => {
+      const tokenArgs = getTokenArgs();
+      const newToken = await Token.new(...tokenArgs);
+      const { logs } = await colonyNetwork.createColony(newToken.address);
+      const { colonyAddress } = logs[0].args;
+      const newColony = IColony.at(colonyAddress);
+      await newToken.setOwner(colonyAddress);
+
+      await newColony.setTokenSupplyCeiling(100);
+
+      await newColony.setTokenIssuanceRate(10, 10, 0);
+
+      await forwardTime(10, this);
+      await newColony.mintTokens(10);
+
+      await forwardTime(60 * 60 * 24 * 28, this);
+      await newColony.setTokenIssuanceRate(11, 10, 10);
+
+      await forwardTime(10, this);
+      await newColony.mintTokens(11);
+
+      await forwardTime(60 * 60 * 24 * 28, this);
+      await newColony.setTokenIssuanceRate(12, 10, 10);
+
+      await forwardTime(10, this);
+      await newColony.mintTokens(12);
     });
   });
 });

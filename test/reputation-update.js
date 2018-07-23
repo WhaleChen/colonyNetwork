@@ -1,10 +1,10 @@
 /* globals artifacts */
-import web3Utils from "web3-utils";
+import { toBN } from "web3-utils";
 import { BN } from "bn.js";
 
 import { MANAGER, WORKER, EVALUATOR, OTHER, MANAGER_PAYOUT, WORKER_PAYOUT } from "../helpers/constants";
 import { getTokenArgs, checkErrorRevert } from "../helpers/test-helper";
-import { fundColonyWithTokens, setupRatedTask } from "../helpers/test-data-generator";
+import { fundColonyWithInitialTokens, setupRatedTask } from "../helpers/test-data-generator";
 
 import { setupColonyVersionResolver } from "../helpers/upgradable-contracts";
 
@@ -44,11 +44,17 @@ contract("Colony Reputation Updates", () => {
     const metaColonyAddress = await colonyNetwork.getMetaColony.call();
     await colonyToken.setOwner(metaColonyAddress);
     metaColony = await IColony.at(metaColonyAddress);
+    await metaColony.setTokenSupplyCeiling(
+      toBN(2)
+        .pow(toBN(256))
+        .subn(1)
+        .toString()
+    );
     const amount = new BN(10)
       .pow(new BN(18))
       .mul(new BN(1000))
       .toString();
-    await fundColonyWithTokens(metaColony, colonyToken, amount);
+    await fundColonyWithInitialTokens(metaColony, colonyToken, amount);
     await colonyNetwork.startNextCycle();
     const inactiveReputationMiningCycleAddress = await colonyNetwork.getReputationMiningCycle(false);
     inactiveReputationMiningCycle = ReputationMiningCycle.at(inactiveReputationMiningCycleAddress);
@@ -186,8 +192,7 @@ contract("Colony Reputation Updates", () => {
       });
       await metaColony.finalizeTask(taskId1);
       let repLogEntryWorker = await inactiveReputationMiningCycle.getReputationUpdateLogEntry(3);
-      const result = web3Utils
-        .toBN(WORKER_PAYOUT)
+      const result = toBN(WORKER_PAYOUT)
         .muln(3)
         .divn(2);
       assert.equal(repLogEntryWorker[1].toString(), result.toString());
@@ -210,7 +215,7 @@ contract("Colony Reputation Updates", () => {
         .pow(new BN(255))
         .sub(new BN(1))
         .toString(10);
-      await fundColonyWithTokens(metaColony, colonyToken, maxUIntNumber);
+      await fundColonyWithInitialTokens(metaColony, colonyToken, maxUIntNumber);
       // Split the tokens as payouts between the manager and worker
       const managerPayout = new BN("2");
       const evaluatorPayout = new BN("1");

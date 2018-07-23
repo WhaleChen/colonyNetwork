@@ -149,9 +149,33 @@ contract IColony {
   /// @param _amount Amount of reputation/tokens for every address
   function bootstrapColony(address[] _users, int[] _amount) public;
 
-  /// @notice Mint `_wad` amount of colony tokens. Secured function to authorised members
-  /// @param _wad Amount to mint
-  function mintTokens(uint256 _wad) public;
+  /// @notice Mint `_amount` amount of colony tokens. Function secured to authorised members
+  /// @param _amount Amount to mint
+  function mintTokens(uint256 _amount) public;
+
+  /// @notice Mint initial amount of colony tokens. Secured function to authorised members
+  /// Only allowed to be called when colony is in bootstrap mode, i.e. when `taskCount` is 0
+  /// @param _amount Amount to mint
+  function mintInitialTokens(uint _amount) public;
+
+  /// @notice Sets colony's token issuance rate. Can only be called once every 4 weeks by authorised members
+  /// @param _amount Amount of tokens
+  /// @param _period Period over which `_amount` of tokens become available
+  /// @param _precision Precision of difference between new and the old rate
+  function setTokenIssuanceRate(uint256 _amount, uint256 _period, uint256 _precision) public;
+
+  /// @notice Get token issuance rate
+  /// @return amount Amount of tokens
+  /// @return period Period over which tokens become available
+  function getTokenIssuanceRate() public view returns (uint256 amount, uint256 period);
+
+  /// @notice Sets token supply ceiling
+  /// @param _amount Maximum amount of tokens allowed to be minted
+  function setTokenSupplyCeiling(uint256 _amount) public;
+
+  /// @notice Get token supply ceiling
+  /// @return tokenSupplyCeiling Token supply ceiling
+  function getTokenSupplyCeiling() public view returns (uint256 tokenSupplyCeiling);
 
   /// @notice Mints CLNY in the Meta Colony and transfers them to the colony network
   /// Only allowed to be called on the Meta Colony by the colony network

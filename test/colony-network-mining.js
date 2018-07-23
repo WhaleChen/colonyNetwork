@@ -2,10 +2,11 @@
 
 import path from "path";
 import BN from "bn.js";
+import { toBN } from "web3-utils";
 import { TruffleLoader } from "@colony/colony-js-contract-loader-fs";
 
 import { forwardTime, checkErrorRevert, web3GetTransactionReceipt } from "../helpers/test-helper";
-import { giveUserCLNYTokens, giveUserCLNYTokensAndStake, setupRatedTask, fundColonyWithTokens } from "../helpers/test-data-generator";
+import { giveUserCLNYTokens, giveUserCLNYTokensAndStake, setupRatedTask } from "../helpers/test-data-generator";
 
 import ReputationMiner from "../packages/reputation-miner/ReputationMiner";
 import MaliciousReputationMinerExtraRep from "../packages/reputation-miner/test/MaliciousReputationMinerExtraRep";
@@ -49,6 +50,14 @@ contract("ColonyNetworkMining", accounts => {
     metaColony = IColony.at(metaColonyAddress);
     const clnyAddress = await metaColony.getToken();
     clny = Token.at(clnyAddress);
+    await metaColony.setTokenIssuanceRate("10000000000000000000", 1, 1);
+    await metaColony.setTokenSupplyCeiling(
+      toBN(2)
+        .pow(toBN(256))
+        .subn(1)
+        .toString()
+    );
+    await forwardTime(1, this);
   });
 
   beforeEach(async () => {
@@ -2079,7 +2088,8 @@ contract("ColonyNetworkMining", accounts => {
       await forwardTime(3600, this);
       const repCycle = ReputationMiningCycle.at(addr);
       await repCycle.submitRootHash("0x12345678", 10, 10);
-      await fundColonyWithTokens(metaColony, clny, "350000000000000000000");
+      await metaColony.mintTokens("350000000000000000000");
+      await metaColony.claimColonyFunds(clny.address);
       const taskId1 = await setupRatedTask({ colonyNetwork, colony: metaColony });
       await metaColony.finalizeTask(taskId1); // Creates an entry in the reputation log for the worker and manager
       addr = await colonyNetwork.getReputationMiningCycle.call(false);

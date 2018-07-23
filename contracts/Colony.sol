@@ -74,10 +74,52 @@ contract Colony is ColonyStorage, PatriciaTreeProofs {
     setRoleAssignmentFunction(bytes4(keccak256("setTaskEvaluatorRole(uint256,address)")));
     setRoleAssignmentFunction(bytes4(keccak256("setTaskWorkerRole(uint256,address)")));
 
+    // Setting this so there will be no tokens available for issuing when the colony is created
+    totalIssuedInSeconds = now;
+
     // Initialise the root domain
     IColonyNetwork colonyNetwork = IColonyNetwork(colonyNetworkAddress);
     uint256 rootLocalSkill = colonyNetwork.getSkillCount();
     initialiseDomain(rootLocalSkill);
+  }
+
+  function setTokenIssuanceRate(uint256 _amount, uint256 _period, uint256 _precision) public auth {
+    require(_amount > 0 && _period > 0, "token-issuance-rate-bad-inputs");
+    require(sub(now, lastIssuenceRateChangeTimestamp) >= 4 weeks, "token-issuance-rate-change-not-allowed");
+
+    // If we are setting the rate for the first time we will not go through these checks
+    if (tokenIssuanceRate.amount > 0 && tokenIssuanceRate.period > 0) {
+      // Calculate the current rate in form of token/second
+      uint256 oldRate = mul(tokenIssuanceRate.amount, _precision) / tokenIssuanceRate.period;
+      // Calculate new rate
+      uint256 newRate = mul(_amount, _precision) / _period;
+      // this will throw if `_precision` is not high enough
+      require(oldRate > 0 && newRate > 0, "token-issuance-rate-bad-precision");
+      // Get the difference between rates
+      uint256 diff = (oldRate > newRate) ? sub(oldRate, newRate) : sub(newRate, oldRate);
+      require(diff > 0, "token-issuance-rate-invalid-rate");
+      // How much is new rate different (in percent) relative to the current one
+      uint256 percent = mul(diff, 100) / oldRate;
+      // Must be less than 10 percent
+      require(percent <= 10, "token-issuance-rate-change-too-big");
+    }
+
+    lastIssuenceRateChangeTimestamp = now;
+
+    tokenIssuanceRate = TokenIssuanceRate(_amount, _period);
+  }
+
+  function setTokenSupplyCeiling(uint256 _amount) public auth {
+    require(_amount > token.totalSupply(), "token-supply-ceiling-bad-input");
+    tokenSupplyCeiling = _amount;
+  }
+
+  function getTokenSupplyCeiling() public view returns (uint256) {
+    return tokenSupplyCeiling;
+  }
+
+  function getTokenIssuanceRate() public view returns (uint256, uint256) {
+    return (tokenIssuanceRate.amount, tokenIssuanceRate.period);
   }
 
   function bootstrapColony(address[] _users, int[] _amounts) public
@@ -94,10 +136,32 @@ contract Colony is ColonyStorage, PatriciaTreeProofs {
     }
   }
 
-  function mintTokens(uint _wad) public
+  function mintInitialTokens(uint256 _amount) public
+  auth
+  isInBootstrapPhase
+  {
+    require(add(_amount, token.totalSupply()) <= tokenSupplyCeiling, "token-issuance-amount-exceeds-supply-ceiling");
+    return token.mint(_amount);
+  }
+
+  function mintTokens(uint _amount) public
   auth
   {
-    return token.mint(_wad);
+    require(add(_amount, token.totalSupply()) <= tokenSupplyCeiling, "token-issuance-amount-exceeds-supply-ceiling");
+
+    // Get how many seconds passed from last issuance
+    uint256 timePassedFromLastIssuance = sub(now, totalIssuedInSeconds);
+    // How much is available for issuance
+    uint256 totalAvailable = mul(timePassedFromLastIssuance, tokenIssuanceRate.amount) / tokenIssuanceRate.period;
+
+    require(_amount <= totalAvailable, "token-issuance-amount-not-available");
+
+    // Extract how many seconds corresponds to `_amount` of tokens
+    uint256 time = mul(_amount, timePassedFromLastIssuance) / totalAvailable;
+    // Register that we issued amount corresponding to `time` amount of seconds
+    totalIssuedInSeconds = add(totalIssuedInSeconds, time);
+
+    return token.mint(_amount);
   }
 
   function mintTokensForColonyNetwork(uint _wad) public {

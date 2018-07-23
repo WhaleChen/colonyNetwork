@@ -42,6 +42,12 @@ contract Authority is DSRoles {
     setOwnerRoleCapability(colony, "upgrade(uint256)");
     // Claim colony ENS label
     setOwnerRoleCapability(colony, "registerColonyLabel(bytes32)");
+    // Set token issuance rate
+    setOwnerRoleCapability(colony, "setTokenIssuanceRate(uint256,uint256,uint256)");
+    // Mint initial tokens
+    setOwnerRoleCapability(colony, "mintInitialTokens(uint256)");
+    // Set token supply ceiling
+    setOwnerRoleCapability(colony, "setTokenSupplyCeiling(uint256)");
 
     // Allocate funds
     setAdminRoleCapability(colony, "moveFundsBetweenPots(uint256,uint256,uint256,address)");
