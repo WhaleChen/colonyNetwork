@@ -20,7 +20,6 @@ pragma experimental "v0.5.0";
 
 import "../lib/dappsys/auth.sol";
 import "../lib/dappsys/math.sol";
-import "./SafeMath.sol";
 import "./ERC20Extended.sol";
 import "./IColonyNetwork.sol";
 import "./Authority.sol";
@@ -39,21 +38,20 @@ contract ColonyStorage is DSAuth, DSMath {
   ERC20Extended token;
 
   struct TokenIssuanceRate {
-    // Amount of tokens available for certain period
+    // Amount describing how many tokens can be issued for one month
     uint256 amount;
-    // Period of time at which tokens become available
-    uint256 period;
+    // Last time the token issuance rate is changed
+    // It is used to assure that rate can be changed once every 4 weeks
+    uint256 timestamp;
   }
 
+  // Keeps information about token issuance rate amount and last change timestamp
+  TokenIssuanceRate tokenIssuanceRate;
   // Amount of tokens allowed in circulation
   uint256 tokenSupplyCeiling;
-  // Rate describing how many tokens can be issued for specific period of time
-  TokenIssuanceRate tokenIssuanceRate;
-  // Last time the token issuance rate is changed
-  // It is used to assure that rate can be changed once every 4 weeks
-  uint256 lastIssuenceRateChangeTimestamp;
   // Keeps track of how many tokens are issued in terms of seconds
-  uint256 totalIssuedInSeconds;
+  // TODO: If we decide to mint entire available amount in `mintTokens`, there will be no need for this variable
+  uint256 totalAmountIssuedUntilTimestamp;
 
   // Mapping function signature to 2 task roles whose approval is needed to execute
   mapping (bytes4 => uint8[2]) reviewers;

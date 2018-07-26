@@ -3,7 +3,7 @@
 import { toBN } from "web3-utils";
 import { INITIAL_FUNDING, MANAGER } from "../helpers/constants";
 import { checkErrorRevert, getTokenArgs } from "../helpers/test-helper";
-import { fundColonyWithInitialTokens, setupRatedTask, executeSignedTaskChange, makeTask } from "../helpers/test-data-generator";
+import { fundColonyWithTokens, setupRatedTask, executeSignedTaskChange, makeTask } from "../helpers/test-data-generator";
 
 import { setupColonyVersionResolver } from "../helpers/upgradable-contracts";
 
@@ -411,7 +411,7 @@ contract("Meta Colony", accounts => {
     });
 
     it("should NOT be able to set a domain on finalized task", async () => {
-      await fundColonyWithInitialTokens(colony, token, INITIAL_FUNDING);
+      await fundColonyWithTokens(colony, token, INITIAL_FUNDING);
       const taskId = await setupRatedTask({ colonyNetwork, colony });
       await colony.finalizeTask(taskId);
       await checkErrorRevert(colony.setTaskDomain(taskId, 1));
@@ -453,7 +453,7 @@ contract("Meta Colony", accounts => {
     it("should NOT be able to set global skill on finalized task", async () => {
       await metaColony.addGlobalSkill(1);
       await metaColony.addGlobalSkill(5);
-      await fundColonyWithInitialTokens(colony, token, INITIAL_FUNDING);
+      await fundColonyWithTokens(colony, token, INITIAL_FUNDING);
       const taskId = await setupRatedTask({ colonyNetwork, colony });
       await colony.finalizeTask(taskId);
       await checkErrorRevert(colony.setTaskSkill(taskId, 6));

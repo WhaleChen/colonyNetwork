@@ -26,7 +26,7 @@ import { getTokenArgs, currentBlockTime, forwardTime, bnSqrt } from "../helpers/
 import { setupColonyVersionResolver } from "../helpers/upgradable-contracts";
 import {
   giveUserCLNYTokensAndStake,
-  fundColonyWithInitialTokens,
+  fundColonyWithTokens,
   executeSignedTaskChange,
   executeSignedRoleAssignment,
   makeTask
@@ -99,7 +99,12 @@ contract("All", accounts => {
         .subn(1)
         .toString()
     );
-    await metaColony.setTokenIssuanceRate("1000000000000000000", 1, 0);
+    await metaColony.setTokenIssuanceRate(
+      toBN(2)
+        .pow(toBN(128))
+        .subn(1)
+        .toString()
+    );
 
     const otherTokenArgs = getTokenArgs();
     otherToken = await Token.new(...otherTokenArgs);
@@ -121,7 +126,7 @@ contract("All", accounts => {
     });
 
     it("when working with a Colony", async () => {
-      await colony.mintInitialTokens(200);
+      await colony.mintTokens(200);
       await colony.claimColonyFunds(tokenAddress);
       await colony.setAdminRole(EVALUATOR);
     });
@@ -354,8 +359,8 @@ contract("All", accounts => {
           .toString()
       );
 
-      await fundColonyWithInitialTokens(newColony, otherToken, initialFunding.toString());
-      await newColony.mintInitialTokens(workerReputation.add(managerReputation).toString());
+      await fundColonyWithTokens(newColony, otherToken, initialFunding.toString());
+      await newColony.mintTokens(workerReputation.add(managerReputation).toString());
 
       await newColony.bootstrapColony([WORKER, MANAGER], [workerReputation.toString(), managerReputation.toString()]);
 
@@ -398,7 +403,7 @@ contract("All", accounts => {
       await forwardTime(5184001);
       await newColony.finalizeRewardPayout(payoutId);
 
-      await fundColonyWithInitialTokens(newColony, otherToken, initialFunding.toString());
+      await fundColonyWithTokens(newColony, otherToken, initialFunding.toString());
 
       const tx2 = await newColony.startNextRewardPayout(otherToken.address);
       const payoutId2 = tx2.logs[0].args.id;
@@ -425,21 +430,23 @@ contract("All", accounts => {
 
       await newColony.setTokenSupplyCeiling(100);
 
-      await newColony.setTokenIssuanceRate(10, 10, 0);
+      await newColony.setTokenIssuanceRate(10);
 
-      await forwardTime(10, this);
+      const oneMonth = 60 * 60 * 24 * 30;
+      const fourWeeks = 60 * 60 * 24 * 28;
+      await forwardTime(oneMonth, this);
       await newColony.mintTokens(10);
 
-      await forwardTime(60 * 60 * 24 * 28, this);
-      await newColony.setTokenIssuanceRate(11, 10, 10);
+      await forwardTime(fourWeeks, this);
+      await newColony.setTokenIssuanceRate(11);
 
-      await forwardTime(10, this);
+      await forwardTime(oneMonth, this);
       await newColony.mintTokens(11);
 
-      await forwardTime(60 * 60 * 24 * 28, this);
-      await newColony.setTokenIssuanceRate(12, 10, 10);
+      await forwardTime(fourWeeks, this);
+      await newColony.setTokenIssuanceRate(12);
 
-      await forwardTime(10, this);
+      await forwardTime(oneMonth, this);
       await newColony.mintTokens(12);
     });
   });

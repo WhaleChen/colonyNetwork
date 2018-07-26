@@ -50,7 +50,11 @@ contract("ColonyNetworkMining", accounts => {
     metaColony = IColony.at(metaColonyAddress);
     const clnyAddress = await metaColony.getToken();
     clny = Token.at(clnyAddress);
-    await metaColony.setTokenIssuanceRate("10000000000000000000", 1, 1);
+    await metaColony.setTokenIssuanceRate(
+      toBN(2)
+        .pow(toBN(128).subn(1))
+        .toString()
+    );
     await metaColony.setTokenSupplyCeiling(
       toBN(2)
         .pow(toBN(256))

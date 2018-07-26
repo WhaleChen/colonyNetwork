@@ -20,7 +20,7 @@ import {
   SECONDS_PER_DAY
 } from "../helpers/constants";
 import { getTokenArgs, currentBlockTime, checkErrorRevert, forwardTime, expectEvent } from "../helpers/test-helper";
-import { fundColonyWithInitialTokens, setupAssignedTask, setupRatedTask } from "../helpers/test-data-generator";
+import { fundColonyWithTokens, setupAssignedTask, setupRatedTask } from "../helpers/test-data-generator";
 
 const IColony = artifacts.require("IColony");
 const IColonyNetwork = artifacts.require("IColonyNetwork");
@@ -142,7 +142,7 @@ contract("Colony Task Work Rating", () => {
 
   describe("when revealing a task work rating", () => {
     it("should allow revealing a rating by evaluator and worker", async () => {
-      await fundColonyWithInitialTokens(colony, token, INITIAL_FUNDING);
+      await fundColonyWithTokens(colony, token, INITIAL_FUNDING);
       const taskId = await setupRatedTask({ colonyNetwork, colony, token });
 
       const roleManager = await colony.getTaskRole.call(taskId, MANAGER_ROLE);
